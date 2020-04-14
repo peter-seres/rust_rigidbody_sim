@@ -1,0 +1,11 @@
+[package]
+name = "rust_sim"
+version = "0.1.0"
+authors = ["Peter Seres <peet.seres@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nalgebra = "0.20.0"
+kiss3d = "0.23.0"
