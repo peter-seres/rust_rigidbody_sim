@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 nalgebra = "0.20.0"
 kiss3d = "0.23.0"
+log = "0.4.8"

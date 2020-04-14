@@ -1,42 +1,15 @@
 extern crate nalgebra as na;
 extern crate kiss3d;
+#[macro_use] extern crate log;
 use std::fmt;
 use std::time;
 use std::thread;
 
 // Todo list:
-// 1. test rigidbody dynamics
 // 2. xbox joystick input handling
 // 3. plotting / logging
-
-// fn get_q_as_matrix(q: &na::Vector4<f32>) -> na::Matrix4<f32> {
-
-//     let q_mat = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
-//                                  q[1],  q[0], -q[3],  q[2],
-//                                  q[2],  q[3],  q[0], -q[1],
-//                                  q[3], -q[2],  q[1],  q[0]);
-
-//     return q_mat;
-// }
-
-// fn get_quaternion_derivative(q: &na::Vector4<f32>, omega: &na::Vector3<f32>) -> na::Vector4<f32> {
-//     let q_pqr = na::Vector4::new(0.0, omega[0], omega[1], omega[2]);
-//     let q_mat = get_q_as_matrix(q);
-//     let q_dot = 0.5 * q_mat * q_pqr;
-//     return q_dot;
-// }
-
-// fn get_quaternion_vector(q: na::UnitQuaternion<f32>) -> na::Vector4<f32>{
-//     let q_vec = q.as_vector();
-//     let q_vec_flipped = na::Vector4::new(q_vec[3], q[0], q[1], q[2]);
-//     return q_vec_flipped;
-// }
-
-// fn build_quaternion_from_vector(q_vec: na::Vector4<f32>) -> na::UnitQuaternion<f32> {
-//     let q = na::Quaternion::from(q_vec);
-//     let q_unit = na::UnitQuaternion::from_quaternion(q);
-//     return q_unit;
-// }
+// 4. add runge kutta dynamics
+// 5. add .obj file for pretty-ness
 
 fn as_matrix(q: na::Vector4<f32>) -> na::Matrix4<f32> {
     let mat = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
@@ -95,12 +68,14 @@ impl RigidBody
         let inertia_inv = inertia.try_inverse();
         let j_inv: na::Matrix3<f32>;
 
+        // Check if inverse exists: (set identity if not)
         match inertia_inv {
-            Some(res) => {
+            Some(res) => { 
                 j_inv = res;
             }
             None => {
                 j_inv = na::Matrix3::identity();
+                warn!("The following inertia matrix has no inverse: {}. Used Identity matrix for this simulation.", inertia);
             }
         }
 
@@ -118,6 +93,7 @@ impl RigidBody
         return rb
     }
 
+    // TODO: implement Runge-Kutta 4 integration!
     fn step(&mut self, forces: na::Vector3<f32>, moments: na::Vector3<f32>, dt_ms: f32) {
         let dt = dt_ms / 1000.0;
 
@@ -195,13 +171,17 @@ fn main()
 {
     // GUI Setup:
     let mut window  = kiss3d::window::Window::new("RigidBody Rust Demo by PS");
-    let mut cube    = window.add_cube(1.0, 1.0, 1.0);
+    let mut cube    = window.add_cube(0.9, 0.3, 0.8);
     window.set_light(kiss3d::light::Light::StickToCamera);
-    cube.set_color(0.4, 0.4, 0.83);
+    cube.set_color(0.6, 0.6, 0.93);
     let mut cube_trans: na::Translation3<f32>;
     let mut cube_rot: na::UnitQuaternion<f32>;
-    let mut is_running = true; 
-    
+    let mut is_running = true;
+
+    // Transformation matrices form NED to OpenGL coorinate system:
+    let translation_transform: na::Matrix3<f32> = na::Matrix3::new(1., 0., 0., 0., 0., -1., 0., 1., 0.);
+    let rotation_transform: na::Matrix4<f32> = na::Matrix4::new(0., 1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 1., 0., 0., 0.);
+
     // Rigidbody:
     let mut rb = RigidBody::build_default();
 
@@ -216,7 +196,7 @@ fn main()
 
         // Apply forces and moments in the body frame:
         let forces = na::Vector3::new(0.0, 0.0, 0.0);
-        let moments = na::Vector3::new(0.0, 0.0, 0.1);
+        let moments = na::Vector3::new(0.0, 0.0, 0.0);
 
         // Rigid body step forward:
         rb.step(forces, moments, dt);
@@ -225,13 +205,29 @@ fn main()
         if time_manager.should_render() {
 
             // Move the cube:
-            cube_trans= na::Translation3::from(rb.position);
-            cube_rot = na::UnitQuaternion::from_quaternion(na::Quaternion::from(rb.orientation));
+            let cube_cg = translation_transform * rb.position;
+
+            cube_trans= na::Translation3::from(cube_cg);
+            cube_rot = na::UnitQuaternion::from_quaternion(na::Quaternion::from(rotation_transform * rb.orientation));
             cube.set_local_translation(cube_trans);
             cube.set_local_rotation(cube_rot);
 
             // Call render:
             is_running = window.render();
+
+            // Draw body frame axes:
+            window.draw_line(&na::Point3::from(cube_cg), 
+                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(1., 0., 0.)))),
+                             &na::Point3::new(1., 0., 0.));
+            
+            window.draw_line(&na::Point3::from(cube_cg), 
+                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(0., 1., 0.)))),
+                             &na::Point3::new(0., 1., 0.));
+
+            window.draw_line(&na::Point3::from(cube_cg), 
+                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(0., 0., 1.)))),
+                             &na::Point3::new(0., 0., 1.));
+
         }
     }
 }
