@@ -4,6 +4,7 @@ extern crate kiss3d;
 use std::fmt;
 use std::time;
 use std::thread;
+use std::path::Path;
 
 // Todo list:
 // 2. xbox joystick input handling
@@ -171,7 +172,14 @@ fn main()
 {
     // GUI Setup:
     let mut window  = kiss3d::window::Window::new("RigidBody Rust Demo by PS");
-    let mut cube    = window.add_cube(0.9, 0.3, 0.8);
+
+
+    //let mut cube    = window.add_cube(0.9, 0.3, 0.8);
+    let obj_path = Path::new("assets/aera_low_poly.obj");
+    let mtl_path = Path::new("assets/");
+    let mut cube = window.add_obj(&obj_path, &mtl_path, na::Vector3::new(0.6, 0.6, 0.6));
+
+
     window.set_light(kiss3d::light::Light::StickToCamera);
     cube.set_color(0.6, 0.6, 0.93);
     let mut cube_trans: na::Translation3<f32>;
@@ -217,15 +225,15 @@ fn main()
 
             // Draw body frame axes:
             window.draw_line(&na::Point3::from(cube_cg), 
-                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(1., 0., 0.)))),
+                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(2.1, 0., 0.)))),
                              &na::Point3::new(1., 0., 0.));
             
             window.draw_line(&na::Point3::from(cube_cg), 
-                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(0., 1., 0.)))),
+                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(0., 3.2, 0.)))),
                              &na::Point3::new(0., 1., 0.));
 
             window.draw_line(&na::Point3::from(cube_cg), 
-                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(0., 0., 1.)))),
+                             &na::Point3::from(cube_cg + translation_transform * (rotate_vec(rb.orientation, na::Vector3::new(0., 0., 1.2)))),
                              &na::Point3::new(0., 0., 1.));
 
         }
