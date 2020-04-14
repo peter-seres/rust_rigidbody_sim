@@ -9,35 +9,68 @@ use std::thread;
 // 2. xbox joystick input handling
 // 3. plotting / logging
 
-fn get_q_as_matrix(q: &na::Vector4<f32>) -> na::Matrix4<f32> {
+// fn get_q_as_matrix(q: &na::Vector4<f32>) -> na::Matrix4<f32> {
 
-    let q_mat = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
-                                 q[1],  q[0], -q[3],  q[2],
-                                 q[2],  q[3],  q[0], -q[1],
-                                 q[3], -q[2],  q[1],  q[0]);
+//     let q_mat = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
+//                                  q[1],  q[0], -q[3],  q[2],
+//                                  q[2],  q[3],  q[0], -q[1],
+//                                  q[3], -q[2],  q[1],  q[0]);
 
-    return q_mat;
+//     return q_mat;
+// }
+
+// fn get_quaternion_derivative(q: &na::Vector4<f32>, omega: &na::Vector3<f32>) -> na::Vector4<f32> {
+//     let q_pqr = na::Vector4::new(0.0, omega[0], omega[1], omega[2]);
+//     let q_mat = get_q_as_matrix(q);
+//     let q_dot = 0.5 * q_mat * q_pqr;
+//     return q_dot;
+// }
+
+// fn get_quaternion_vector(q: na::UnitQuaternion<f32>) -> na::Vector4<f32>{
+//     let q_vec = q.as_vector();
+//     let q_vec_flipped = na::Vector4::new(q_vec[3], q[0], q[1], q[2]);
+//     return q_vec_flipped;
+// }
+
+// fn build_quaternion_from_vector(q_vec: na::Vector4<f32>) -> na::UnitQuaternion<f32> {
+//     let q = na::Quaternion::from(q_vec);
+//     let q_unit = na::UnitQuaternion::from_quaternion(q);
+//     return q_unit;
+// }
+
+fn as_matrix(q: na::Vector4<f32>) -> na::Matrix4<f32> {
+    let mat = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
+                               q[1],  q[0], -q[3],  q[2],
+                               q[2],  q[3],  q[0], -q[1],
+                               q[3], -q[2],  q[1],  q[0]);
+    return mat;
 }
 
-fn get_quaternion_derivative(q: &na::Vector4<f32>, omega: &na::Vector3<f32>) -> na::Vector4<f32> {
-    let q_pqr = na::Vector4::new(0.0, omega[0], omega[1], omega[2]);
-    let q_mat = get_q_as_matrix(q);
-    let q_dot = 0.5 * q_mat * q_pqr;
-    return q_dot;
+fn as_inverse_matrix(q: na::Vector4<f32>) -> na::Matrix4<f32> {
+    let mat = na::Matrix4::new(q[0],   q[1],  q[2],  q[3],
+                               -q[1],  q[0],  q[3], -q[2],
+                               -q[2], -q[3],  q[0],  q[1],
+                               -q[3],  q[2],  -q[1],  q[0]);
+    return mat;
 }
 
-fn get_quaternion_vector(q: na::UnitQuaternion<f32>) -> na::Vector4<f32>{
-    let q_vec = q.as_vector();
-    let q_vec_flipped = na::Vector4::new(q_vec[3], q[0], q[1], q[2]);
-    return q_vec_flipped;
+
+fn as_quat(v: na::Vector3<f32>) -> na::Vector4<f32> {
+    let v_ext = na::Vector4::new(0.0, v[0], v[1], v[2]);
+    return v_ext;
 }
 
-fn build_quaternion_from_vector(q_vec: na::Vector4<f32>) -> na::UnitQuaternion<f32> {
-    let q = na::Quaternion::from(q_vec);
-    let q_unit = na::UnitQuaternion::from_quaternion(q);
-    return q_unit;
+fn rotate_vec(q: na::Vector4<f32>, p: na::Vector3<f32>) -> na::Vector3<f32> {
+    let p_extended = as_quat(p);
+    let p_rot_extended = as_matrix(q) * (as_matrix(p_extended) * as_inverse_matrix(q));
+    let p_rot = na::Vector3::new(p_rot_extended[1], p_rot_extended[2], p_rot_extended[3]);
+    return p_rot;
 }
 
+fn rotate_quat(q_1: na::Vector4<f32>, q_2: na::Vector4<f32>) -> na::Vector4<f32> {
+    let q = as_matrix(q_1) * q_2;
+    return q;
+}
 
 struct RigidBody
 {
@@ -49,7 +82,7 @@ struct RigidBody
     // States:
     position: na::Vector3<f32>,
     velocity: na::Vector3<f32>,
-    orientation: na::UnitQuaternion<f32>,
+    orientation: na::Vector4<f32>,
     angular_velocity : na::Vector3<f32>, 
 }
 
@@ -78,7 +111,7 @@ impl RigidBody
             inertia_inverse: j_inv,
             position: na::Vector3::zeros(), 
             velocity: na::Vector3::zeros(), 
-            orientation: na::UnitQuaternion::from_euler_angles(0.0, 0.0, 10.0),
+            orientation: na::Vector4::new(1.0, 0.0, 0.0, 0.0),
             angular_velocity: na::Vector3::zeros()
         };
 
@@ -92,24 +125,11 @@ impl RigidBody
         self.position += self.velocity * dt;
 
         // Linear Dynamics: 
-        self.velocity += self.orientation * forces * dt / self.m; 
+        self.velocity += rotate_vec(self.orientation, forces) * dt / self.m; 
 
         // Rotational Kinematics:
-        let q_vec = self.orientation.as_vector();
-        let q = na::Vector4::new(q_vec[3], q_vec[0], q_vec[1], q_vec[2]);
-        let q_mat = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
-                                     q[1],  q[0], -q[3],  q[2],
-                                     q[2],  q[3],  q[0], -q[1],
-                                     q[3], -q[2],  q[1],  q[0]);
-
-        let q_pqr = na::Vector4::new(0.0, self.angular_velocity[0], self.angular_velocity[1], self.angular_velocity[2]);
-        let q_dot = 0.5 * q_mat * q_pqr;
-        let new_q = q + q_dot * dt;
-        let new_q_quat = na::Quaternion::from(new_q);
-        self.orientation = na::UnitQuaternion::from_quaternion(new_q_quat);
-
-        // self.orientation = na::UnitQuaternion::new(new_q[0], new_q[1], new_q[2], new_q[3]);
-        //self.orientation = build_quaternion_from_vector(new_q);
+        self.orientation += 0.5 * as_matrix(self.orientation) * as_quat(self.angular_velocity) * dt;
+        self.orientation.normalize_mut();
 
         // Rotational Dynamics:
         let angular_momentum = self.inertia * self.angular_velocity;
@@ -178,41 +198,40 @@ fn main()
     let mut cube    = window.add_cube(1.0, 1.0, 1.0);
     window.set_light(kiss3d::light::Light::StickToCamera);
     cube.set_color(0.4, 0.4, 0.83);
-
+    let mut cube_trans: na::Translation3<f32>;
+    let mut cube_rot: na::UnitQuaternion<f32>;
+    let mut is_running = true; 
+    
     // Rigidbody:
     let mut rb = RigidBody::build_default();
 
     // Time management:
     let mut time_manager = TimeStep::new();
-    loop
+    while is_running
     {
-        let sleepy_time = time::Duration::from_millis(1);
+        // Let the Thread sleep for a bit:
+        let sleepy_time = time::Duration::from_micros(500);
         thread::sleep(sleepy_time);
         let dt = time_manager.delta();
 
-        println!("DT: {}", dt);
+        // Apply forces and moments in the body frame:
+        let forces = na::Vector3::new(0.0, 0.0, 0.0);
+        let moments = na::Vector3::new(0.0, 0.0, 0.1);
 
-        let forces = na::Vector3::new(0.0, 0.0, 10.0);
-        let moments = na::Vector3::new(0.0, 0.0, 0.000);
-
+        // Rigid body step forward:
         rb.step(forces, moments, dt);
-
-        // Move the cube:
-        let tr = na::Translation3::from(rb.position);
-
-        cube.set_local_translation(tr);
-        cube.set_local_rotation(rb.orientation);
-        println!("cube pos: {}", rb.position);
-        println!("cube vel: {}", rb.velocity);
-        println!("cube quat: {}", rb.orientation);
-        println!("cube pqr: {}", rb.angular_velocity);
-
-
-        window.render();
 
         // Render only every MS_PER_FRAME millisecond: 
         if time_manager.should_render() {
-            window.render();
+
+            // Move the cube:
+            cube_trans= na::Translation3::from(rb.position);
+            cube_rot = na::UnitQuaternion::from_quaternion(na::Quaternion::from(rb.orientation));
+            cube.set_local_translation(cube_trans);
+            cube.set_local_rotation(cube_rot);
+
+            // Call render:
+            is_running = window.render();
         }
     }
 }
