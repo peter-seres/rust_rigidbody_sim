@@ -6,11 +6,32 @@ use std::time;
 // 2. xbox joystick input handling
 // 3. plotting / logging
 
+type FP = f32;
+
+fn get_q_as_matrix(q: na::Vector4<f32>) -> na::Matrix4<f32>{
+
+    let Q = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
+                             q[1],  q[0], -q[3],  q[2],
+                             q[2],  q[3],  q[0], -q[1],
+                             q[3], -q[2],  q[1],  q[0]);
+
+    return Q;
+}
+
+fn get_quaternion_derivative(q: &na::Vector4<f32>, omega: &na::Vector3<f32>) -> na::Vector4<f32> {
+    let q_pqr = na::Vector4::new(0.0, omega[0], omega[1], omega[2]);
+    let Q = get_q_as_matrix(q);
+    let q_dot = 0.5 * Q * q_pqr;
+    return q_dot;
+}
+
+
 struct RigidBody
 {
     // Parameters:
     m: f32,
     inertia: na::Matrix3<f32>,
+    inertia_inverse: na::Matrix3<f32>,
 
     // States:
     position: na::Vector3<f32>,
@@ -19,21 +40,47 @@ struct RigidBody
     angular_velocity : na::Vector3<f32>, 
 }
 
-
 impl RigidBody 
 {
     fn build_default() -> RigidBody 
     {
         let mass : f32 = 10.5;
         let inertia : na::Matrix3<f32> = na::Matrix3::identity();
-        
+        let inertia_inv = inertia.inverse();
+
         // Initial states are all zero:
-        let rb = RigidBody{m: mass, inertia: inertia, position: na::Vector3::zeros(), 
-                velocity: na::Vector3::zeros(), orientation: na::UnitQuaternion::identity(),
-                angular_velocity: na::Vector3::zeros()};
+        let rb = RigidBody{
+            m: mass, 
+            inertia: inertia, 
+            inertia_inverse: inertia_inv,
+            position: na::Vector3::zeros(), 
+            velocity: na::Vector3::zeros(), 
+            orientation: na::UnitQuaternion::identity(),
+            angular_velocity: na::Vector3::zeros()
+        };
 
         return rb
     }
+
+    fn step(&mut self, F: na::Vector3<f32>, M: na::Vector3<f32>, dt_ms: f32) {
+        let dt = dt_ms * 0.001;
+
+        // Linear kinematics:
+        self.position = self.position + self.velocity * dt;
+
+        // Linear Dynamics: 
+        self.velocity = self.orientation * F / self.m; 
+
+        // Rotational Kinematics:
+        let q = self.orientation.as_vector();
+        let q_dot = get_quaternion_derivative(q, &self.angular_velocity);
+        let new_q = q + q_dot * dt;
+        self.orientation = na::UnitQuaternion::from_vector(new_q);
+
+        // Rotational Dynamics:
+        let angular_momentum = self.inertia * self.angular_velocity;
+        self.angular_velocity = self.inertia_inverse * (M - self.angular_velocity.cross(&angular_momentum));
+    } 
 }
 
 impl fmt::Display for RigidBody 
