@@ -8,7 +8,7 @@ use std::time;
 
 type FP = f32;
 
-fn get_q_as_matrix(q: na::Vector4<f32>) -> na::Matrix4<f32>{
+fn get_q_as_matrix(q: &na::Vector4<f32>) -> na::Matrix4<f32> {
 
     let Q = na::Matrix4::new(q[0], -q[1], -q[2], -q[3],
                              q[1],  q[0], -q[3],  q[2],
@@ -23,6 +23,18 @@ fn get_quaternion_derivative(q: &na::Vector4<f32>, omega: &na::Vector3<f32>) -> 
     let Q = get_q_as_matrix(q);
     let q_dot = 0.5 * Q * q_pqr;
     return q_dot;
+}
+
+fn get_quaternion_vector(q: na::UnitQuaternion<f32>) -> na::Vector4<f32>{
+    let q_vec = q.as_vector();
+    let q_vec_flipped = na::Vector4::new(q_vec[3], q[0], q[1], q[2]);
+    return q_vec_flipped;
+}
+
+fn build_quaternion_from_vector(q_vec: na::Vector4<f32>) -> na::UnitQuaternion<f32> {
+    let q = na::Quaternion::from(q_vec);
+    let q_unit = na::UnitQuaternion::from_quaternion(q);
+    return q_unit;
 }
 
 
@@ -46,13 +58,23 @@ impl RigidBody
     {
         let mass : f32 = 10.5;
         let inertia : na::Matrix3<f32> = na::Matrix3::identity();
-        let inertia_inv = inertia.inverse();
+        let inertia_inv = inertia.try_inverse();
+        let j_inv: na::Matrix3<f32>;
+
+        match inertia_inv {
+            Some(res) => {
+                j_inv = res;
+            }
+            None => {
+                j_inv = na::Matrix3::identity();
+            }
+        }
 
         // Initial states are all zero:
         let rb = RigidBody{
             m: mass, 
             inertia: inertia, 
-            inertia_inverse: inertia_inv,
+            inertia_inverse: j_inv,
             position: na::Vector3::zeros(), 
             velocity: na::Vector3::zeros(), 
             orientation: na::UnitQuaternion::identity(),
@@ -72,10 +94,10 @@ impl RigidBody
         self.velocity = self.orientation * F / self.m; 
 
         // Rotational Kinematics:
-        let q = self.orientation.as_vector();
-        let q_dot = get_quaternion_derivative(q, &self.angular_velocity);
+        let q = get_quaternion_vector(self.orientation);
+        let q_dot = get_quaternion_derivative(&q, &self.angular_velocity);
         let new_q = q + q_dot * dt;
-        self.orientation = na::UnitQuaternion::from_vector(new_q);
+        self.orientation = build_quaternion_from_vector(new_q);
 
         // Rotational Dynamics:
         let angular_momentum = self.inertia * self.angular_velocity;
