@@ -2,7 +2,6 @@ extern crate nalgebra as na;
 use crate::quaternion;
 use std::fmt;
 
-
 // This module implements a 6DOF rigidbody struct with properties: mass and inertia matrix. The step method applies 3D force and moment vectors to the system.
 
 pub struct RigidBody
@@ -35,7 +34,7 @@ impl RigidBody
             }
             None => {
                 j_inv = na::Matrix3::identity();
-                warn!("The following inertia matrix has no inverse: {}. Used Identity matrix for this simulation.", inertia);
+                println!("The following inertia matrix has no inverse: {}. Used Identity matrix for this simulation.", inertia);
             }
         }
 
