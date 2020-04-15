@@ -4,6 +4,28 @@ use std::fmt;
 
 // This module implements a 6DOF rigidbody struct with properties: mass and inertia matrix. The step method applies 3D force and moment vectors to the system.
 
+struct StateDot {
+    pos_dot: na::Vector3<f32>,
+    vel_dot: na::Vector3<f32>,
+    quat_dot: na::Vector4<f32>,
+    omega_dot: na::Vector3<f32>,
+}
+
+// Todo: restructure dynamics call, to allow Runge Kutta integration:
+
+struct State {
+    pos: na::Vector3<f32>,
+    vel: na::Vector3<f32>,
+    quat: na::Vector4<f32>,
+    omega: na::Vector3<f32>,
+}
+
+struct Input {
+    forces: na::Vector3<f32>,
+    moments: na::Vector3<f32>,
+}
+
+
 pub struct RigidBody
 {
     // Parameters:
@@ -52,24 +74,44 @@ impl RigidBody
         return rb
     }
 
-    // TODO: implement Runge-Kutta 4 integration!
-    pub fn step(&mut self, forces: na::Vector3<f32>, moments: na::Vector3<f32>, dt_ms: f32) {
-        let dt = dt_ms / 1000.0;
+    fn dynamics(&self, forces: na::Vector3<f32>, moments: na::Vector3<f32>) -> StateDot {
 
-        // Linear kinematics:
-        self.position += self.velocity * dt;
+        // Translational kinematics:
+        let pos_dot = self.velocity;
 
-        // Linear Dynamics: 
-        self.velocity += quaternion::rotate_vec(self.orientation, forces) * dt / self.m; 
+        // Translational Dynamics: 
+        let vel_dot = quaternion::rotate_vec(self.orientation, forces) / self.m;
 
         // Rotational Kinematics:
-        self.orientation += quaternion::q_dot(self.orientation, self.angular_velocity) * dt;
-        self.orientation.normalize_mut();
+        let quat_dot = quaternion::q_dot(self.orientation, self.angular_velocity);
 
         // Rotational Dynamics:
         let angular_momentum = self.inertia * self.angular_velocity;
-        let angular_acceleration =self.inertia_inverse * (moments - self.angular_velocity.cross(&angular_momentum));
-        self.angular_velocity += angular_acceleration * dt;
+        let omega_dot = self.inertia_inverse * (moments - self.angular_velocity.cross(&angular_momentum));
+
+        let sd = StateDot{
+            pos_dot: pos_dot,
+            vel_dot: vel_dot,
+            quat_dot: quat_dot,
+            omega_dot: omega_dot
+        };
+
+        return sd;
+    }
+
+    fn euler_forward(&mut self, state_dot: StateDot, dt: f32) -> () {
+        self.position += state_dot.pos_dot * dt;
+        self.velocity += state_dot.vel_dot * dt;
+        self.orientation += state_dot.quat_dot * dt;
+        self.angular_velocity += state_dot.omega_dot * dt;
+    }
+
+    pub fn step(&mut self, forces: na::Vector3<f32>, moments: na::Vector3<f32>, dt_ms: f32) {
+        let dt = dt_ms / 1000.0;
+
+        let state_dot = self.dynamics(forces, moments);
+
+        self.euler_forward(state_dot, dt);
     } 
 }
 
