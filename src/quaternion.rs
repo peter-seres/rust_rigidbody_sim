@@ -1,5 +1,7 @@
 extern crate nalgebra as na;
 
+// This module implements essential quaternion rotation equations for na::Vector4<f32> representation of a unit quaternion.
+
 
 // For quaternion rotations:
 pub fn as_matrix(q: na::Vector4<f32>) -> na::Matrix4<f32> {
@@ -37,4 +39,10 @@ pub fn rotate_vec(q: na::Vector4<f32>, p: na::Vector3<f32>) -> na::Vector3<f32> 
 pub fn _rotate_quat(q_1: na::Vector4<f32>, q_2: na::Vector4<f32>) -> na::Vector4<f32> {
     let q = as_matrix(q_1) * q_2;
     return q;
+}
+
+// Quaternion derivative: q_dot = 0.5 * Q * [0, omega]^T
+pub fn q_dot(q: na::Vector4<f32>, omega: na::Vector3<f32> ) -> na::Vector4<f32> {
+    let q_derivative = 0.5 * as_matrix(q) * as_quat(omega);
+    return q_derivative;
 }

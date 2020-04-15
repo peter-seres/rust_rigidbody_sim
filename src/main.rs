@@ -1,7 +1,7 @@
 extern crate nalgebra as na;
 extern crate kiss3d;
 #[macro_use] extern crate log;
-use gilrs::{Gilrs, Axis, Event, Gamepad, EventType};
+use gilrs::{Gilrs, Axis, Event, EventType};
 use std::time;
 use std::thread;
 use std::path::Path;
@@ -11,57 +11,104 @@ mod time_manager;
 mod rigid_body;
 
 // Todo list:
-// 2. plotting / logging
-// 3. add runge kutta dynamics
+// 1. plotting / logging
+// 2. add runge kutta dynamics
+// 3. Add rotor dynamics
+// 4. Add mixer
+// 5. Add attitude rate controller
+
+
+struct MyScene {
+    window: kiss3d::window::Window,
+    uav: kiss3d::scene::SceneNode,
+    _ground: kiss3d::scene::SceneNode,
+}
+
+impl MyScene {
+
+    pub fn new() -> MyScene{
+        
+        // Setup of the main window:
+        let mut window = kiss3d::window::Window::new("RigidBody Demo");
+        window.set_light(kiss3d::light::Light::StickToCamera);
+
+        // Load .obj file for UAV:
+        let obj_path = Path::new("assets/aera_low_poly.obj");
+        let mtl_path = Path::new("assets/");
+        let mut uav = window.add_obj(&obj_path, &mtl_path, na::Vector3::new(0.6, 0.6, 0.6));
+        uav.set_color(0.6, 0.6, 0.93);
+
+        // Ground plane:
+        let mut ground = window.add_quad(13.0, 13.0, 10, 10);
+        ground.set_local_translation(na::Translation3::from(na::Vector3::new(0.0, -1.0, 0.0)));
+        ground.set_local_rotation(na::UnitQuaternion::from_euler_angles(1.5708, 0., 0.));
+        ground.set_color(0.3, 0.3, 0.3);
+
+        let scene = MyScene{
+            window: window,
+            uav: uav,
+            _ground: ground
+        };
+
+        return scene;
+    }
+
+    pub fn render(&mut self, rb: &rigid_body::RigidBody) -> bool {
+
+        // Move the uav in the scene:
+        let pos: na::Vector3<f32> = MyScene::to_scene_translation_transform(rb.position);
+        self.uav.set_local_translation(na::Translation3::from(pos));
+
+        // Rotate the uav in the scene:
+        let rot_scene: na::Vector4<f32> = MyScene::to_scene_rotation_transform(rb.orientation);
+        let rot: na::Quaternion<f32> = na::Quaternion::from(rot_scene);
+        self.uav.set_local_rotation(na::UnitQuaternion::from_quaternion(rot));
+
+        // Render command:
+        let running: bool = self.window.render();
+        return running
+    }
+
+    fn to_scene_translation_transform(v: na::Vector3<f32>) -> na::Vector3<f32> {
+        let v_scene: na::Vector3<f32> = na::Vector3::new(v[0], -v[2], v[1]);
+        return v_scene;
+    }
+
+    fn to_scene_rotation_transform(q: na::Vector4<f32>) -> na::Vector4<f32> {
+        let q_scene: na::Vector4<f32> = na::Vector4::new(q[1], -q[3], q[2], q[0]);
+        return q_scene;
+    }
+}
+
 
 fn main() 
 {
-    // GUI Setup:
-    let mut window  = kiss3d::window::Window::new("RigidBody Rust Demo by PS");
-    window.set_light(kiss3d::light::Light::StickToCamera);
-    let mut is_running = true;
-
-    // Drone object setup:
-    let obj_path = Path::new("assets/aera_low_poly.obj");
-    let mtl_path = Path::new("assets/");
-    let mut cube = window.add_obj(&obj_path, &mtl_path, na::Vector3::new(0.6, 0.6, 0.6));
-    cube.set_color(0.6, 0.6, 0.93);
-    let mut cube_trans: na::Translation3<f32>;
-    let mut cube_rot: na::UnitQuaternion<f32>;
-
-    // Ground plane setup:
-    let mut quad = window.add_quad(13.0, 13.0, 10, 10);
-    quad.set_color(0.3, 0.3, 0.3);
-    quad.set_local_translation(na::Translation3::from(na::Vector3::new(0.0, -1.0, 0.0)));
-    quad.set_local_rotation(na::UnitQuaternion::from_euler_angles(1.5708, 0., 0.));
-
-    // Transformation matrices from NED to OpenGL coorinate system:
-    let translation_transform: na::Matrix3<f32> = na::Matrix3::new(1., 0., 0., 0., 0., -1., 0., 1., 0.);
-    let rotation_transform: na::Matrix4<f32> = na::Matrix4::new(0., 1., 0., 0., 0., 0., 0., -1., 0., 0., 1., 0., 1., 0., 0., 0.);
+    // Gui scene setup:
+    let mut scene: MyScene = MyScene::new();
 
     // Rigidbody:
-    let mut rb = rigid_body::RigidBody::build_default();
+    let mut rb = rigid_body::RigidBody::new();
 
     // Game pad management:
     let mut gilrs = Gilrs::new().unwrap();
-    let mut _gp: Option<Gamepad> = None;
 
     for (_id, gamepad) in gilrs.gamepads() {
         println!(" >>> Available input device: {}", gamepad.name());
-        _gp = Some(gilrs.gamepad(gamepad.id()));
     }
 
-    // Time management:
-    let mut time_manager = time_manager::TimeStep::new();
-
+    // Gamepad inputs:
     let mut _throttle = 0.0;
     let mut _roll = 0.0;
     let mut _pitch = 0.0;
     let mut _yaw = 0.0;
 
+    // Time management:
+    let mut time_manager = time_manager::TimeStep::new();
+
+    // Main Loop:
+    let mut is_running = true;
     while is_running
     {
-
         // Gamepad input:
         while let Some(Event { id: _, event, time: _ }) = gilrs.next_event() {
             match event {
@@ -99,15 +146,8 @@ fn main()
         // Render only every MS_PER_FRAME millisecond: 
         if time_manager.should_render() {
 
-            // Move drone in the scene:
-            let cube_cg = translation_transform * rb.position;
-            cube_trans= na::Translation3::from(cube_cg);
-            cube_rot = na::UnitQuaternion::from_quaternion(na::Quaternion::from(rotation_transform * rb.orientation));
-            cube.set_local_translation(cube_trans);
-            cube.set_local_rotation(cube_rot);
-
             // Call render:
-            is_running = window.render();
+            is_running = scene.render(&rb);
 
             // Draw body frame axes:
             // window.draw_line(&na::Point3::from(cube_cg), 

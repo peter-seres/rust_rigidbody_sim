@@ -3,6 +3,8 @@ use crate::quaternion;
 use std::fmt;
 
 
+// This module implements a 6DOF rigidbody struct with properties: mass and inertia matrix. The step method applies 3D force and moment vectors to the system.
+
 pub struct RigidBody
 {
     // Parameters:
@@ -19,7 +21,7 @@ pub struct RigidBody
 
 impl RigidBody 
 {
-    pub fn build_default() -> RigidBody 
+    pub fn new() -> RigidBody 
     {
         let mass : f32 = 10.5;
         let inertia : na::Matrix3<f32> = na::Matrix3::identity();
@@ -62,7 +64,7 @@ impl RigidBody
         self.velocity += quaternion::rotate_vec(self.orientation, forces) * dt / self.m; 
 
         // Rotational Kinematics:
-        self.orientation += 0.5 * quaternion::as_matrix(self.orientation) * quaternion::as_quat(self.angular_velocity) * dt;
+        self.orientation += quaternion::q_dot(self.orientation, self.angular_velocity) * dt;
         self.orientation.normalize_mut();
 
         // Rotational Dynamics:
