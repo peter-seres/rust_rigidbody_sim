@@ -12,7 +12,7 @@ var position
 
 func _ready():
 	# Set up the UDP port to listen to:
-	if (socketUDP.listen(port, "127.0.0.1", 4096) != OK):
+	if (socketUDP.listen(port, "127.0.0.1", 1024) != OK):
 		printt("Error listening on port: " + str(port))
 	else:
 		printt("Listening on port: " + str(port))

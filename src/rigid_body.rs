@@ -1,30 +1,72 @@
 extern crate nalgebra as na;
 use crate::quaternion;
 use std::fmt;
+use std::ops;
 
 // This module implements a 6DOF rigidbody struct with properties: mass and inertia matrix. The step method applies 3D force and moment vectors to the system.
-
-struct StateDot {
-    pos_dot: na::Vector3<f32>,
-    vel_dot: na::Vector3<f32>,
-    quat_dot: na::Vector4<f32>,
-    omega_dot: na::Vector3<f32>,
+#[derive(Copy, Clone)]
+struct State {
+    position: na::Vector3<f32>,
+    velocity: na::Vector3<f32>,
+    orientation: na::Vector4<f32>,
+    angular_velocity : na::Vector3<f32>,
 }
 
-// Todo: restructure dynamics call, to allow Runge Kutta integration:
+impl State {
+    fn new () -> State {
+        State{
+            position: na::Vector3::zeros(), 
+            velocity: na::Vector3::zeros(), 
+            orientation: na::Vector4::new(1.0, 0.0, 0.0, 0.0),
+            angular_velocity: na::Vector3::zeros()
+        }
+    }
+}
 
-// struct State {
-//     pos: na::Vector3<f32>,
-//     vel: na::Vector3<f32>,
-//     quat: na::Vector4<f32>,
-//     omega: na::Vector3<f32>,
-// }
+impl ops::Mul<f32> for State {
+    type Output = State;
 
-// struct Input {
-//     forces: na::Vector3<f32>,
-//     moments: na::Vector3<f32>,
-// }
+    fn mul(self, _rhs: f32) -> State {
+        State {
+            position: self.position * _rhs,
+            velocity: self.velocity * _rhs,
+            orientation: self.orientation * _rhs,
+            angular_velocity: self.angular_velocity * _rhs,
+        }
+    }
+}
 
+impl ops::Mul<State> for f32 {
+    type Output = State;
+
+    fn mul(self, _rhs: State) -> State {
+        State {
+            position: _rhs.position * self,
+            velocity: _rhs.velocity * self,
+            orientation: _rhs.orientation * self,
+            angular_velocity: _rhs.angular_velocity * self,
+        }
+    }
+}
+
+impl ops::Add<State> for State {
+    type Output = State;
+
+    fn add(self, _rhs: State) -> State {
+        State {
+            position: self.position + _rhs.position,
+            velocity: self.velocity + _rhs.velocity,
+            orientation: self.orientation + _rhs.orientation,
+            angular_velocity: self.angular_velocity + _rhs.angular_velocity,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+struct FMInput {
+    forces: na::Vector3<f32>,
+    moments: na::Vector3<f32>,
+}
 
 pub struct RigidBody
 {
@@ -34,10 +76,7 @@ pub struct RigidBody
     inertia_inverse: na::Matrix3<f32>,
 
     // States:
-    pub position: na::Vector3<f32>,
-    pub velocity: na::Vector3<f32>,
-    pub orientation: na::Vector4<f32>,
-    pub angular_velocity : na::Vector3<f32>,
+    state: State,
 }
 
 impl RigidBody 
@@ -60,61 +99,89 @@ impl RigidBody
             }
         }
 
+        let state = State::new();
+
         // Initial states are all zero:
         RigidBody{
             m: mass, 
             inertia, 
             inertia_inverse: j_inv,
-            position: na::Vector3::zeros(), 
-            velocity: na::Vector3::zeros(), 
-            orientation: na::Vector4::new(1.0, 0.0, 0.0, 0.0),
-            angular_velocity: na::Vector3::zeros()
+            state,
         }
     }
+    pub fn get_position(&self) -> na::Vector3<f32> {
+        self.state.position
+    }
 
-    fn dynamics(&self, forces: na::Vector3<f32>, moments: na::Vector3<f32>) -> StateDot {
+    pub fn get_orientation(&self) -> na::Vector4<f32> {
+        self.state.orientation
+    }
+
+    fn dynamics(&self, x: State, u: FMInput) -> State {
 
         // Translational kinematics:
-        let pos_dot = self.velocity;
+        let pos_dot = x.velocity;
 
         // Translational Dynamics: 
-        let vel_dot = quaternion::rotate_vec(self.orientation, forces) / self.m;
+        let vel_dot = quaternion::rotate_vec(x.orientation, u.forces) / self.m;
 
         // Rotational Kinematics:
-        let quat_dot = quaternion::q_dot(self.orientation, self.angular_velocity);
+        let quat_dot = quaternion::q_dot(x.orientation, x.angular_velocity);
 
         // Rotational Dynamics:
-        let angular_momentum = self.inertia * self.angular_velocity;
-        let omega_dot = self.inertia_inverse * (moments - self.angular_velocity.cross(&angular_momentum));
+        let angular_momentum = self.inertia * x.angular_velocity;
+        let omega_dot = self.inertia_inverse * (u.moments - x.angular_velocity.cross(&angular_momentum));
 
-        StateDot{
-            pos_dot,
-            vel_dot,
-            quat_dot,
-            omega_dot
+        State{
+            position: pos_dot,
+            velocity: vel_dot,
+            orientation: quat_dot,
+            angular_velocity: omega_dot
         }
     }
 
-    fn euler_forward(&mut self, state_dot: StateDot, dt: f32) {
-        self.position += state_dot.pos_dot * dt;
-        self.velocity += state_dot.vel_dot * dt;
-        self.orientation += state_dot.quat_dot * dt;
-        self.angular_velocity += state_dot.omega_dot * dt;
+    fn rk4(&mut self, input: FMInput, dt: f32) -> State {
+
+        let d1  = dt * self.dynamics(self.state, input);
+
+        let d2_start = self.state + 0.5 * d1; 
+        let d2  = dt * self.dynamics(d2_start, input);
+
+        let d3_start = self.state + 0.5 * d2; 
+        let d3  = dt * self.dynamics(d3_start, input);
+
+        let d4_start = self.state + d3;
+        let d4  = dt * self.dynamics(d4_start, input);
+
+        let increment = (1.0 / 6.0) * (d1 + 2.0 * d2 + 2.0 * d3 + d4);
+    
+        self.state + increment
     }
 
+    // Step the system forward using RK4
     pub fn step(&mut self, forces: na::Vector3<f32>, moments: na::Vector3<f32>, dt_ms: f32) {
         let dt = dt_ms / 1000.0;
 
-        let state_dot = self.dynamics(forces, moments);
-
-        self.euler_forward(state_dot, dt);
+        let input = FMInput{forces, moments};
+        self.state = self.rk4(input, dt);
     } 
 }
 
+
+// Print statements:
 impl fmt::Display for RigidBody 
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
     {
         write!(f, "RigidBody with mass: {} and inertia: {}", self.m, self.inertia)
+    }
+}
+
+impl fmt::Display for State 
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+    {
+        write!(f, "State with position: {} velocity {}, quaternion: {} and omega {}.", 
+        self.position, self.velocity, self.orientation, self.angular_velocity)
     }
 }

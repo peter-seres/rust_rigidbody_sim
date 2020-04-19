@@ -11,8 +11,6 @@ pub struct TimeStep
 
 impl TimeStep {
 
-    const MS_PER_FRAME: f32 = 16.7;
-
     pub fn new() -> TimeStep {
         TimeStep {
             last_time: time::Instant::now(),
@@ -31,11 +29,11 @@ impl TimeStep {
         delta
     }
 
-    pub fn should_render(&mut self) -> bool {
+    pub fn should_render(&mut self, ms_per_frame: f32) -> bool {
         let current_time = time::Instant::now();
         let delta_render = current_time.duration_since(self.last_render_time).as_millis() as f32;
 
-        if delta_render >= TimeStep::MS_PER_FRAME {
+        if delta_render >= ms_per_frame {
             self.last_render_time = current_time;
             self.render_dt = delta_render;
             true
