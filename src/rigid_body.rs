@@ -13,17 +13,17 @@ struct StateDot {
 
 // Todo: restructure dynamics call, to allow Runge Kutta integration:
 
-struct State {
-    pos: na::Vector3<f32>,
-    vel: na::Vector3<f32>,
-    quat: na::Vector4<f32>,
-    omega: na::Vector3<f32>,
-}
+// struct State {
+//     pos: na::Vector3<f32>,
+//     vel: na::Vector3<f32>,
+//     quat: na::Vector4<f32>,
+//     omega: na::Vector3<f32>,
+// }
 
-struct Input {
-    forces: na::Vector3<f32>,
-    moments: na::Vector3<f32>,
-}
+// struct Input {
+//     forces: na::Vector3<f32>,
+//     moments: na::Vector3<f32>,
+// }
 
 
 pub struct RigidBody
@@ -61,17 +61,15 @@ impl RigidBody
         }
 
         // Initial states are all zero:
-        let rb = RigidBody{
+        RigidBody{
             m: mass, 
-            inertia: inertia, 
+            inertia, 
             inertia_inverse: j_inv,
             position: na::Vector3::zeros(), 
             velocity: na::Vector3::zeros(), 
             orientation: na::Vector4::new(1.0, 0.0, 0.0, 0.0),
             angular_velocity: na::Vector3::zeros()
-        };
-
-        return rb
+        }
     }
 
     fn dynamics(&self, forces: na::Vector3<f32>, moments: na::Vector3<f32>) -> StateDot {
@@ -89,17 +87,15 @@ impl RigidBody
         let angular_momentum = self.inertia * self.angular_velocity;
         let omega_dot = self.inertia_inverse * (moments - self.angular_velocity.cross(&angular_momentum));
 
-        let sd = StateDot{
-            pos_dot: pos_dot,
-            vel_dot: vel_dot,
-            quat_dot: quat_dot,
-            omega_dot: omega_dot
-        };
-
-        return sd;
+        StateDot{
+            pos_dot,
+            vel_dot,
+            quat_dot,
+            omega_dot
+        }
     }
 
-    fn euler_forward(&mut self, state_dot: StateDot, dt: f32) -> () {
+    fn euler_forward(&mut self, state_dot: StateDot, dt: f32) {
         self.position += state_dot.pos_dot * dt;
         self.velocity += state_dot.vel_dot * dt;
         self.orientation += state_dot.quat_dot * dt;

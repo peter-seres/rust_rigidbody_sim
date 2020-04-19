@@ -28,7 +28,7 @@ impl TimeStep {
         self.last_time = current_time;
         self.delta_time = delta;
 
-        return delta;
+        delta
     }
 
     pub fn should_render(&mut self) -> bool {
@@ -38,9 +38,9 @@ impl TimeStep {
         if delta_render >= TimeStep::MS_PER_FRAME {
             self.last_render_time = current_time;
             self.render_dt = delta_render;
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 }

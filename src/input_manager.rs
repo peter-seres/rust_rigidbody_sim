@@ -28,17 +28,15 @@ impl ControllerInput {
             yaw: 0.,
         }; 
 
-        let ci = ControllerInput{
-                    gilrs: gilrs,
-                    manual_control: mc,
-                };
-
-        return ci;
+        ControllerInput{
+            gilrs,
+            manual_control: mc,
+        }
     }
 
-    pub fn listen_to_inputs(&mut self) -> () {
+    pub fn listen_to_inputs(&mut self){
 
-        while let Some(Event { id: _, event, time: _ }) = self.gilrs.next_event() {
+        while let Some(Event {event, ..}) = self.gilrs.next_event() {
             match event {
                 EventType::AxisChanged(Axis::LeftStickX, val, _) => self.manual_control.yaw = val,
                 EventType::AxisChanged(Axis::LeftStickY, val, _) => self.manual_control.throttle = val,

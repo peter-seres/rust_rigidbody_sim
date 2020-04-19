@@ -3,6 +3,7 @@ extern crate kiss3d;
 use crate::rigid_body;
 use crate::quaternion;
 use std::path::Path;
+use std::f32::consts::FRAC_PI_2;
 
 
 pub struct MyScene {
@@ -28,26 +29,24 @@ impl MyScene {
         // Ground plane:
         let mut ground = window.add_quad(13.0, 13.0, 10, 10);
         ground.set_local_translation(na::Translation3::from(na::Vector3::new(0.0, -1.0, 0.0)));
-        ground.set_local_rotation(na::UnitQuaternion::from_euler_angles(1.5708, 0., 0.));
+        ground.set_local_rotation(na::UnitQuaternion::from_euler_angles(FRAC_PI_2, 0., 0.));
         ground.set_color(0.3, 0.3, 0.3);
 
-        let scene = MyScene{
-            window: window,
-            uav: uav,
+        MyScene{
+            window,
+            uav,
             _ground: ground
-        };
-
-        return scene;
+        }
     }
 
     pub fn render(&mut self, rb: &rigid_body::RigidBody) -> bool {
 
         // Move the uav in the scene:
-        let pos: na::Vector3<f32> = MyScene::to_scene_translation_transform(rb.position);
+        let pos: na::Vector3<f32> = MyScene::transform_translation_to_scene(rb.position);
         self.uav.set_local_translation(na::Translation3::from(pos));
 
         // Rotate the uav in the scene:
-        let rot_scene: na::Vector4<f32> = MyScene::to_scene_rotation_transform(rb.orientation);
+        let rot_scene: na::Vector4<f32> = MyScene::transform_rotation_to_scene(rb.orientation);
         let rot: na::Quaternion<f32> = na::Quaternion::from(rot_scene);
         self.uav.set_local_rotation(na::UnitQuaternion::from_quaternion(rot));
 
@@ -55,15 +54,15 @@ impl MyScene {
         let start = &na::Point3::from(pos);
 
         let end_i = &na::Point3::from(
-            pos + MyScene::to_scene_translation_transform(
+            pos + MyScene::transform_translation_to_scene(
             quaternion::rotate_vec(rb.orientation, na::Vector3::new(2.1, 0., 0.))
             ));
         let end_j = &na::Point3::from(
-            pos + MyScene::to_scene_translation_transform(
+            pos + MyScene::transform_translation_to_scene(
             quaternion::rotate_vec(rb.orientation, na::Vector3::new(0., 3.2, 0.))
             ));
         let end_k = &na::Point3::from(
-            pos + MyScene::to_scene_translation_transform(
+            pos + MyScene::transform_translation_to_scene(
             quaternion::rotate_vec(rb.orientation, na::Vector3::new(0., 0., 1.2))
             ));
 
@@ -72,17 +71,14 @@ impl MyScene {
         self.window.draw_line(start, end_k, &na::Point3::new(0., 0., 1.));
 
         // Render command:
-        let running: bool = self.window.render();
-        return running
+        self.window.render()
     }
 
-    fn to_scene_translation_transform(v: na::Vector3<f32>) -> na::Vector3<f32> {
-        let v_scene: na::Vector3<f32> = na::Vector3::new(v[0], -v[2], v[1]);
-        return v_scene;
+    fn transform_translation_to_scene(v: na::Vector3<f32>) -> na::Vector3<f32> {
+        na::Vector3::new(v[0], -v[2], v[1])
     }
 
-    fn to_scene_rotation_transform(q: na::Vector4<f32>) -> na::Vector4<f32> {
-        let q_scene: na::Vector4<f32> = na::Vector4::new(q[1], -q[3], q[2], q[0]);
-        return q_scene;
+    fn transform_rotation_to_scene(q: na::Vector4<f32>) -> na::Vector4<f32> {
+       na::Vector4::new(q[1], -q[3], q[2], q[0])
     }
 }
