@@ -36,7 +36,7 @@ impl ControllerInput {
 
     pub fn listen_to_inputs(&mut self){
 
-        while let Some(Event {event, ..}) = self.gilrs.next_event() {
+        while let Some(Event { event, ..}) = self.gilrs.next_event() {
             match event {
                 EventType::AxisChanged(Axis::LeftStickX, val, _) => self.manual_control.yaw = val,
                 EventType::AxisChanged(Axis::LeftStickY, val, _) => self.manual_control.throttle = val,
