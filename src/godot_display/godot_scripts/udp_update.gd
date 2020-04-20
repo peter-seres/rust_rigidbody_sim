@@ -1,14 +1,12 @@
 extends Spatial
 
-# This script receives NED attitude and quaternion rotation updates through a 
+# This script receives attitude and quaternion JSON updates through a 
 # UDP port and updates the transform of the Spatial node accordingly.
 
 export var port = 12345
 var socketUDP = PacketPeerUDP.new()
 var attitude
 var position
-
-
 
 func _ready():
 	# Set up the UDP port to listen to:
@@ -17,8 +15,8 @@ func _ready():
 	else:
 		printt("Listening on port: " + str(port))
 
-
-func _process(_delta):
+# Fixed timestemp update:
+func _physics_process(delta):
 	
 	# Check for incoming packets:
 	if socketUDP.get_available_packet_count() > 0:
@@ -33,6 +31,7 @@ func _process(_delta):
 			
 			# Set the rotation of the transform:
 			var q = Quat(attitude[0], attitude[1], attitude[2], attitude[3])
-			transform.basis = Basis(q)	
+			transform.basis = Basis(q)
+			
 		else:
 			printt('JSON parse error.')

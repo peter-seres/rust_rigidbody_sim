@@ -41,7 +41,7 @@ fn main()
         let dt = time_manager.delta();
 
         // Apply forces and moments in the body frame:
-        let forces = na::Vector3::new(0., 0., 0.);
+        let forces = na::Vector3::new(200.0 * inputs.manual_control.throttle, 0., 0.);
         let moments = na::Vector3::new(inputs.manual_control.roll, 0., inputs.manual_control.yaw);
 
         // Rigid body step forward:
